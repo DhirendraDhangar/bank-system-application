@@ -1,0 +1,149 @@
+import random
+import re
+import sqlite3
+from datetime import datetime
+
+# Database setup
+conn = sqlite3.connect('banking_system.db')
+cursor = conn.cursor()
+
+# Create tables
+cursor.execute('''CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    account_number TEXT UNIQUE NOT NULL,
+    dob TEXT NOT NULL,
+    city TEXT NOT NULL,
+    password TEXT NOT NULL,
+    balance REAL NOT NULL,
+    contact_number TEXT NOT NULL,
+    email TEXT NOT NULL,
+    address TEXT NOT NULL,
+    is_active INTEGER DEFAULT 1
+)''')
+
+cursor.execute('''CREATE TABLE IF NOT EXISTS transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_number TEXT NOT NULL,
+    transaction_type TEXT NOT NULL,
+    amount REAL NOT NULL,
+    date TEXT NOT NULL
+)''')
+
+conn.commit()
+
+def validate_name(name):
+    return name.isalpha()
+
+def validate_contact(contact):
+    return bool(re.match(r'^[6-9]\d{9}$', contact))
+
+def validate_email(email):
+    return bool(re.match(r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$', email))
+
+def validate_password(password):
+    return bool(re.match(r'^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$', password))
+
+def generate_account_number():
+    return str(random.randint(10**9, 10**10 - 1))
+
+def add_user():
+    print("\n--- Add User ---")
+    name = input("Enter Name: ")
+    while not validate_name(name):
+        print("Invalid name. Only alphabetic characters are allowed.")
+        name = input("Enter Name: ")
+
+    dob = input("Enter Date of Birth (YYYY-MM-DD): ")
+    city = input("Enter City: ")
+
+    password = input("Create Password: ")
+    while not validate_password(password):
+        print("Password must be at least 8 characters, include a number, and a special character.")
+        password = input("Create Password: ")
+
+    initial_balance = float(input("Enter Initial Balance (minimum 2000): "))
+    while initial_balance < 2000:
+        print("Initial balance must be at least 2000.")
+        initial_balance = float(input("Enter Initial Balance (minimum 2000): "))
+
+    contact = input("Enter Contact Number: ")
+    while not validate_contact(contact):
+        print("Invalid contact number. Must start with 6-9 and be 10 digits.")
+        contact = input("Enter Contact Number: ")
+
+    email = input("Enter Email: ")
+    while not validate_email(email):
+        print("Invalid email format.")
+        email = input("Enter Email: ")
+
+    address = input("Enter Address: ")
+    account_number = generate_account_number()
+
+    try:
+        cursor.execute('''INSERT INTO users (name, account_number, dob, city, password, balance, contact_number, email, address) 
+                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                       (name, account_number, dob, city, password, initial_balance, contact, email, address))
+        conn.commit()
+        print(f"User added successfully! Account Number: {account_number}")
+    except sqlite3.IntegrityError:
+        print("Account creation failed. Try again.")
+
+def show_users():
+    print("\n--- Users List ---")
+    cursor.execute("SELECT name, account_number, dob, city, contact_number, email, address, balance FROM users")
+    users = cursor.fetchall()
+    for user in users:
+        print("""\nName: {0}\nAccount Number: {1}\nDate of Birth: {2}\nCity: {3}\nContact: {4}\nEmail: {5}\nAddress: {6}\nBalance: {7}\n""".format(*user))
+
+def login():
+    print("\n--- Login ---")
+    account_number = input("Enter Account Number: ")
+    password = input("Enter Password: ")
+
+    cursor.execute("SELECT * FROM users WHERE account_number = ? AND password = ?", (account_number, password))
+    user = cursor.fetchone()
+
+    if user:
+        print("Login Successful!")
+        while True:
+            print("\n1. Show Balance\n2. Show Transactions\n3. Credit Amount\n4. Debit Amount\n5. Transfer Amount\n6. Activate/Deactivate Account\n7. Change Password\n8. Update Profile\n9. Logout")
+            choice = int(input("Choose an option: "))
+
+            if choice == 1:
+                print(f"Balance: {user[6]}")
+            elif choice == 2:
+                cursor.execute("SELECT * FROM transactions WHERE account_number = ?", (account_number,))
+                transactions = cursor.fetchall()
+                for txn in transactions:
+                    print(txn)
+            elif choice == 9:
+                print("Logged out successfully.")
+                break
+            else:
+                print("Feature not yet implemented.")
+    else:
+        print("Invalid credentials.")
+
+def main():
+    while True:
+        print("\n--- Banking System ---")
+        print("1. Add User\n2. Show Users\n3. Login\n4. Exit")
+        choice = int(input("Choose an option: "))
+
+        if choice == 1:
+            add_user()
+        elif choice == 2:
+            show_users()
+        elif choice == 3:
+            login()
+        elif choice == 4:
+            print("Exiting... Goodbye!")
+            break
+        else:
+            print("Invalid choice. Try again.")
+
+if __name__ == "__main__":
+    main()
+
+conn.close()
